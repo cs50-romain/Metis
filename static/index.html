@@ -154,22 +154,24 @@
 	    let keysPressed = {};
 
 	    document.addEventListener('keydown', function(event) {
-		console.log(event);
+		console.log(event)
 		keysPressed[event.key] = true;
 
 		if (keysPressed['n'] && event.key == 'i') {
+		    event.preventDefault();
 		    document.getElementById("important-input").focus().value = "";
 		}
 		if (keysPressed['n'] && event.key == 'm') {
+		    event.preventDefault();
 		    document.getElementById("minor-input").focus();
 		}
 		if (keysPressed['n'] && event.key == 'l') {
+		    event.preventDefault();
 		    document.getElementById("later-input").focus();
 		}
 	    })
 
 	    document.addEventListener('keyup', (event) => {
-		console.log(event);
 		delete keysPressed[event.key];
 	    })
 
