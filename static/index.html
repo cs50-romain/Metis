@@ -48,7 +48,7 @@
 				    </div>
 				    <form hx-post="/add-important-item/" hx-target="{{if .ImportantTasks}}#task-important-list {{else}} #start-important-list{{end}}" hx-swap="{{if .ImportantTasks}}afterend {{else}} innerhtml{{end}}">
 					  <div class="flex-none flex items-center border-b border-teal-500 py-2">
-					    <input name="content" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
+					    <input name="content" id="important-input" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
 					    <button class="flex-shrink-0 bg-teal-500 hover:bg-teal-700 border-teal-500 hover:border-teal-700 text-sm border-4 text-white py-1 px-2 rounded" type="submit">Add</button>
 					  </div>
 				    </form>
@@ -77,7 +77,7 @@
 				    </div>
 				    <form hx-post="/add-later-item/" hx-target="{{if .LaterTasks}}#task-later-list {{else}} #start-later-list{{end}}" hx-swap="{{if .LaterTasks}}afterend {{else}} innerhtml{{end}}">
 					  <div class="flex-none flex items-center border-b border-teal-500 py-2">
-					    <input name="content" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
+					    <input name="content" id="later-input" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
 					    <button class="flex-shrink-0 bg-teal-500 hover:bg-teal-700 border-teal-500 hover:border-teal-700 text-sm border-4 text-white py-1 px-2 rounded" type="submit">Add</button>
 					  </div>
 				    </form>
@@ -106,7 +106,7 @@
 				    </div>
 				    <form hx-post="/add-minor-item/" hx-target="{{if .MinorTasks}}#task-minor-list {{else}} #start-minor-list{{end}}" hx-swap="{{if .MinorTasks}}afterend {{else}} innerhtml{{end}}">
 					  <div class="flex-none flex items-center border-b border-teal-500 py-2">
-					    <input name="content" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
+					    <input name="content" id="minor-input" class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" type="text" placeholder="Add Item">
 					    <button class="flex-shrink-0 bg-teal-500 hover:bg-teal-700 border-teal-500 hover:border-teal-700 text-sm border-4 text-white py-1 px-2 rounded" type="submit">Add</button>
 					  </div>
 				    </form>
@@ -150,5 +150,27 @@
 	    dm.addEventListener('dragstart',drag_start,false); 
 	    document.body.addEventListener('dragover',drag_over,false); 
 	    document.body.addEventListener('drop',drop,false); 
+
+	    let keysPressed = {};
+
+	    document.addEventListener('keydown', function(event) {
+		console.log(event);
+		keysPressed[event.key] = true;
+
+		if (keysPressed['n'] && event.key == 'i') {
+		    document.getElementById("important-input").focus().value = "";
+		}
+		if (keysPressed['n'] && event.key == 'm') {
+		    document.getElementById("minor-input").focus();
+		}
+		if (keysPressed['n'] && event.key == 'l') {
+		    document.getElementById("later-input").focus();
+		}
+	    })
+
+	    document.addEventListener('keyup', (event) => {
+		console.log(event);
+		delete keysPressed[event.key];
+	    })
 	</script>
 </html>
