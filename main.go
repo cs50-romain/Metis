@@ -191,22 +191,29 @@ func prefill() {
 	mtasks = tasks.Mtasks
 	ltasks = tasks.Ltasks
 
+	fmt.Println(itasks)
+	fmt.Println(mtasks)
+	fmt.Println(ltasks)
+
 	// AFTER PREFILLING, CHECK DATES AND SEE IF AN OBJECT NEEDS TO SWITCH
 	// CHECK EACH TASK LISTS AND MOVE TASK ACCORDINGLY IF NEEDED
-	moveTasksBasedOnDate()
 	moveTasksBasedOnDate()
 }
 
 func moveTasksBasedOnDate() {
 	for idx, object := range mtasks {
-		if compareDate(object.CreatedAt) > 7 {
+		log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
+		if compareDate(object.CreatedAt) >= 7 {
+			log.Printf("Object Content: %s\tDate Difference: %b\n", object.Content, compareDate(object.CreatedAt))
+			object.Importance = "important"
 			itasks = append(itasks, object)
 			mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
 		}
 	}
 
 	for idx, object := range ltasks {
-		if compareDate(object.CreatedAt) > 4 {
+		if compareDate(object.CreatedAt) >= 4 {
+			object.Importance = "minor"
 			mtasks = append(mtasks, object)
 			ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
 		}
@@ -248,10 +255,6 @@ func compareDate(date time.Time) int{
 }
 
 func main() {
-	date := time.Date(2023, 11, 29, 12, 30, 0, 0, time.UTC)
-	fmt.Println(compareDate(date))
-
-
 	id = 0
 
 	fmt.Println("[+] Decoding json information if any...")
