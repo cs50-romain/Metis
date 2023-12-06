@@ -45,6 +45,14 @@ type LaterTask struct {
 	CreatedAt	time.Time
 }
 
+type Task struct {
+	Id		int
+	Content		string
+	isCompleted	bool
+	CreatedAt	time.Time
+	Importance	string
+}
+
 func empty(content string) bool{
 	if content == "" || content == " " {
 		fmt.Println("Empty")
@@ -77,6 +85,7 @@ func addImportantItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		itasks = append(itasks, ImportantTask{newid, content, false, time.Now()})
+		saveFile()
 	}
 }
 
@@ -104,6 +113,7 @@ func addMinorItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mtasks = append(mtasks, MinorTask{newid, content, false, time.Now()})
+		saveFile()
 	}
 }
 
@@ -131,6 +141,7 @@ func addLaterItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ltasks = append(ltasks, LaterTask{newid, content, false, time.Now()})
+		saveFile()
 	}
 }
 
@@ -161,34 +172,32 @@ func index(w http.ResponseWriter, r *http.Request) {
 }
 
 func saveFile() {
-	for {
-		// Once sessions are created, check to see if the session is inactive, if so save the file and exit.
-		tasks := Tasks{
-			Itasks: itasks,
-			Mtasks: mtasks,
-			Ltasks: ltasks,
-		}
-
-		b, err := json.Marshal(tasks)
-		if err != nil {
-			log.Print("{!] Couldn't save file, retrying in...")
-		} else {
-			fmt.Println("[+] File saved")
-		}
-
-		if os.PathSeparator == PATH_SEP_WINDOWS {
-			err = os.WriteFile("C:\\Program Files\\Metis\\data.json", b, 0644)
-			if err != nil {
-				log.Print("[!] Error saving to file")
-			}
-		} else {
-			err = os.WriteFile("./data.json", b, 0644)
-			if err != nil {
-				log.Print("[!] Error saving to file")
-			}
-		}
-		time.Sleep(10000 * time.Millisecond)
+	// Once sessions are created, check to see if the session is inactive, if so save the file and exit.
+	tasks := Tasks{
+		Itasks: itasks,
+		Mtasks: mtasks,
+		Ltasks: ltasks,
 	}
+
+	b, err := json.Marshal(tasks)
+	if err != nil {
+		log.Print("{!] Couldn't save file, retrying in...")
+	} else {
+		fmt.Println("[+] File saved")
+	}
+
+	if os.PathSeparator == PATH_SEP_WINDOWS {
+		err = os.WriteFile("C:\\Program Files\\Metis\\data.json", b, 0644)
+		if err != nil {
+			log.Print("[!] Error saving to file")
+		}
+	} else {
+		err = os.WriteFile("./data.json", b, 0644)
+		if err != nil {
+			log.Print("[!] Error saving to file")
+		}
+	}
+	time.Sleep(10000 * time.Millisecond)
 }
 
 func prefill() {
@@ -202,9 +211,68 @@ func prefill() {
 	itasks = tasks.Itasks
 	mtasks = tasks.Mtasks
 	ltasks = tasks.Ltasks
+
+	// AFTER PREFILLING, CHECK DATES AND SEE IF AN OBJECT NEEDS TO SWITCH
+	// CHECK EACH TASK LISTS AND MOVE TASK ACCORDINGLY IF NEEDED
+	moveTasksBasedOnDate()
+	moveTasksBasedOnDate()
+}
+
+func moveTasksBasedOnDate() {
+	for idx, object := range mtasks {
+		if compareDate(object.CreatedAt) > 7 {
+			itasks = append(itasks, object)
+			mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
+		}
+	}
+
+	for idx, object := range ltasks {
+		if compareDate(object.CreatedAt) > 4 {
+			mtasks = append(mtasks, object)
+			ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
+		}
+	}
+}
+
+// compareDate 2 DATES (DATE1 AND TIME.NOW()) AND RETURN AN INTEGER - INTEGER WILL BE HOW MANY DAYS DATE1 IS FROM TIME.NOW()
+func compareDate(date time.Time) int{
+	if date.Year() == time.Now().Year() {
+		if date.Month() == time.Now().Month() {
+			return time.Now().Day() - date.Day()
+		} else {
+			monthDiff := int(time.Now().Month()) - int(date.Month())
+			startOfMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.UTC)
+			var daysTillEndOfMonth int = 0 
+			if monthDiff <= 1 {
+				if date.Month() == time.January || date.Month() == time.March || date.Month() == time.May || date.Month() == time.July || date.Month() == time.August || date.Month() == time.October || date.Month() == time.December {
+					daysTillEndOfMonth = 31 - date.Day()
+				} else if date.Month() == time.February {
+					if date.Year() / 2 == 0 {
+						daysTillEndOfMonth = 29 - date.Day() + 1
+					} else {
+						daysTillEndOfMonth = 28 - date.Day() + 1
+					}
+					
+				} else {
+					daysTillEndOfMonth = 30 - date.Day() + 1
+				}
+				return time.Now().Day() - startOfMonth.Day() + daysTillEndOfMonth 
+			} else {
+				return -1
+			}
+		}
+	} else {
+		return -1
+		//return time.Now().Year() - date.Year() + 365 
+	}
+	return -1
 }
 
 func main() {
+	date := time.Date(2023, 11, 29, 12, 30, 0, 0, time.UTC)
+	fmt.Println(compareDate(date))
+
+
 	id = 0
 
 	fmt.Println("[+] Decoding json information if any...")
