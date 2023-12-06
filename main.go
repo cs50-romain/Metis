@@ -11,38 +11,17 @@ import (
 )
 
 var id int
-var itasks []ImportantTask
-var mtasks []MinorTask
-var ltasks []LaterTask
+var itasks []Task
+var mtasks []Task
+var ltasks []Task
 
 const PATH_SEP_WINDOWS = '\\'
 const PATHH_SEP_LINUX = '/'	
 
 type Tasks struct {
-	Itasks	[]ImportantTask
-	Mtasks	[]MinorTask
-	Ltasks	[]LaterTask
-}
-
-type ImportantTask struct {
-	Id		int
-	Content		string
-	isCompleted	bool
-	CreatedAt	time.Time
-}
-
-type MinorTask struct {
-	Id		int
-	Content		string
-	isCompleted	bool
-	CreatedAt	time.Time
-}
-
-type LaterTask struct {
-	Id		int
-	Content		string
-	isCompleted	bool
-	CreatedAt	time.Time
+	Itasks	[]Task
+	Mtasks	[]Task
+	Ltasks	[]Task
 }
 
 type Task struct {
@@ -84,8 +63,8 @@ func addImportantItem(w http.ResponseWriter, r *http.Request) {
 			tmpl.Execute(w, nil)
 		}
 
-		itasks = append(itasks, ImportantTask{newid, content, false, time.Now()})
-		saveFile()
+		itasks = append(itasks, Task{newid, content, false, time.Now(), "important"})
+		go saveFile()
 	}
 }
 
@@ -112,8 +91,8 @@ func addMinorItem(w http.ResponseWriter, r *http.Request) {
 			tmpl.Execute(w, nil)
 		}
 
-		mtasks = append(mtasks, MinorTask{newid, content, false, time.Now()})
-		saveFile()
+		mtasks = append(mtasks, Task{newid, content, false, time.Now(), "minor"})
+		go saveFile()
 	}
 }
 
@@ -140,8 +119,8 @@ func addLaterItem(w http.ResponseWriter, r *http.Request) {
 			tmpl.Execute(w, nil)
 		}
 
-		ltasks = append(ltasks, LaterTask{newid, content, false, time.Now()})
-		saveFile()
+		ltasks = append(ltasks, Task{newid, content, false, time.Now(), "later"})
+		go saveFile()
 	}
 }
 
@@ -159,9 +138,9 @@ func index(w http.ResponseWriter, r *http.Request) {
 	*/
 
 	data := struct {
-		ImportantTasks	[]ImportantTask
-		MinorTasks	[]MinorTask
-		LaterTasks	[]LaterTask
+		ImportantTasks	[]Task
+		MinorTasks	[]Task
+		LaterTasks	[]Task
 	}{
 		ImportantTasks: itasks,
 		MinorTasks: mtasks,
