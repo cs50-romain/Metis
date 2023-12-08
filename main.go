@@ -12,13 +12,12 @@ import (
 	"time"
 )
 
-var id int
 var itasks []Task
 var mtasks []Task
 var ltasks []Task
 
 const PATH_SEP_WINDOWS = '\\'
-const PATHH_SEP_LINUX = '/'	
+const PATH_SEP_LINUX = '/'	
 
 type Tasks struct {
 	Itasks	[]Task
@@ -47,7 +46,7 @@ func Route(w http.ResponseWriter, r *http.Request) {
 	requestpath := strings.Split(r.URL.Path, "/")
 	urlpath := requestpath[1]
 	importance := requestpath[len(requestpath)-1]
-	
+
 	if r.URL.Path == "/" {
 		index(w, r)
 	} else if urlpath == "add-item" {
@@ -62,45 +61,50 @@ func Route(w http.ResponseWriter, r *http.Request) {
 
 func AddItem(w http.ResponseWriter, r *http.Request, importance string) {
 	if r.Method == "POST" {
+		var newid int
 		content := r.PostFormValue("content")
-		newid := id
-		id++
 
 		if empty(content) {
 			http.Error(w, "No content", http.StatusBadRequest)
+		} else {
+			if importance == "important" {
+				newid = len(itasks)
+				itasks = append(itasks, Task{len(itasks), content, false, time.Now(), "later"})
+			} else if importance == "minor" {
+				newid = len(mtasks)
+				mtasks = append(mtasks, Task{len(mtasks), content, false, time.Now(), "later"})
+			} else if importance == "later" {
+				newid = len(ltasks)
+				ltasks = append(ltasks, Task{len(ltasks), content, false, time.Now(), "later"})
+			}
+
+			go saveFile()
+			htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label>\n<input type='checkbox'>%s\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, content, importance, newid)
+			tmpl, _ := template.New("t").Parse(htmlEl)
+			tmpl.Execute(w, nil)
 		}
-
-		if importance == "important" {
-			itasks = append(itasks, Task{newid, content, false, time.Now(), "later"})
-		} else if importance == "minor" {
-			mtasks = append(mtasks, Task{newid, content, false, time.Now(), "later"})
-		} else if importance == "later" {
-			ltasks = append(ltasks, Task{newid, content, false, time.Now(), "later"})
-		}
-
-		htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label>\n<input type='checkbox'>%s\n</label>\n<button>Delete</button>\n</li>", newid, content)
-
-		tmpl, _ := template.New("t").Parse(htmlEl)
-		tmpl.Execute(w, nil)
-		go saveFile()
 	}
 }
 
 func DeleteItem(w http.ResponseWriter, r *http.Request) {
-	log.Print("Delete request received")
+	log.Print("INFO: Delete request received")
 	path := strings.Split(r.URL.Path, "/")
-	idString := path[len(path)-1]
-	fmt.Println(idString)
-	id, err := strconv.Atoi(idString)
-	if err != nil {
-		log.Print("String Conversion Error:", err)
-	}
 	importance := path[len(path)-2]
+	taskId := path[len(path)-1]
+	id, err := strconv.Atoi(taskId)
+
+	log.Printf("INFO: Object information -> id:%b, importance:%s task:%s", id, importance)
+
+	if err != nil {
+		log.Print("ERROR (line 94): String Conversion Error:", err)
+	}
 
 	if importance == "important" {
 		for idx, task := range itasks {
 			if task.Id == id {
+				log.Print("INFO: Found related task:", task)
 				itasks = append(itasks[:idx], itasks[idx+1:]...)
+				log.Print("INFO: New itasks:", itasks)
 			}
 		}
 	} else if importance == "minor" {
@@ -118,12 +122,22 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("Error; Could not find importance type for: %s\n", importance)
 	}
+
+	itasks = FixId(itasks)
+	mtasks = FixId(mtasks)
+	ltasks = FixId(ltasks)
+
 	saveFile()
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
 	log.Print("Index request received")
 	tmpl := template.Must(template.ParseFiles("./static/index.html"))
+
+	itasks = FixId(itasks)
+	mtasks = FixId(mtasks)
+	ltasks = FixId(ltasks)
+
 	data := struct {
 		ImportantTasks	[]Task
 		MinorTasks	[]Task
@@ -177,9 +191,9 @@ func prefill() {
 	mtasks = tasks.Mtasks
 	ltasks = tasks.Ltasks
 
-	fmt.Println(itasks)
-	fmt.Println(mtasks)
-	fmt.Println(ltasks)
+	itasks = FixId(itasks)
+	mtasks = FixId(mtasks)
+	ltasks = FixId(ltasks)
 
 	// AFTER PREFILLING, CHECK DATES AND SEE IF AN OBJECT NEEDS TO SWITCH
 	// CHECK EACH TASK LISTS AND MOVE TASK ACCORDINGLY IF NEEDED
@@ -188,7 +202,7 @@ func prefill() {
 
 func swapTasksBasedOnDate() {
 	for idx, object := range mtasks {
-		log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
+		//log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
 		if compareDate(object.CreatedAt) >= 7 {
 			object.Importance = "important"
 			itasks = append(itasks, object)
@@ -197,7 +211,7 @@ func swapTasksBasedOnDate() {
 	}
 
 	for idx, object := range ltasks {
-		log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
+		//log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
 		if compareDate(object.CreatedAt) >= 4 {
 			object.Importance = "minor"
 			mtasks = append(mtasks, object)
@@ -240,33 +254,21 @@ func compareDate(date time.Time) int{
 	return -1
 }
 
-func getId() int {
-	newid := 0
-	for _, obj := range itasks {
-		if obj.Id > id {
-			newid = obj.Id
-		}
+func FixId(array []Task) []Task {
+	if array == nil {
+		return array
 	}
 
-	for _, obj := range mtasks {
-		if obj.Id > id {
-			newid = obj.Id
-		}
+	for idx,_ := range array {
+		array[idx].Id = idx
 	}
-
-	for _, obj := range ltasks {
-		if obj.Id > id {
-			newid = obj.Id
-		}
-	}
-	return newid + 1
+	return array
 }
 
 func main() {
-	id = getId()
-
 	fmt.Println("[+] Decoding json information if any...")
 	prefill()
+
 	fmt.Println("[+] Starting web server...")
 
 	http.HandleFunc("/", Route)

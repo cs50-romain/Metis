@@ -10,7 +10,7 @@
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
-      background-color: #f0f0f0;
+      background-color: #181818;
     }
 
     .todo-container {
@@ -112,10 +112,10 @@
           <label>
             <input type="checkbox"> {{ .Content }} 
           </label>
-          <button>Delete</button>
+          <button hx-delete="/delete/important/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
         </li>
         {{ end }}
-      </ul>\
+      </ul>
       <div class="add-item">
         <input name="content" type="text" placeholder="New Item">
         <button hx-post="/add-item/important" hx-include="previous input" hx-target="previous ul" hx-swap="beforeend">Add Item</button>
@@ -127,6 +127,12 @@
       <ul class="todo-list">
         {{ range .MinorTasks}}
         <!-- Todo items for Category 2 -->
+        <li id="{{ .Id }}" class="todo-item">
+          <label>
+            <input type="checkbox"> {{ .Content }} 
+          </label>
+          <button hx-delete="/delete/minor{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
+        </li>
         {{ end }}
       </ul>
       <div class="add-item">
@@ -140,6 +146,12 @@
       <ul class="todo-list">
         {{ range .LaterTasks }}
         <!-- Todo items for Category 3 -->
+        <li id="{{ .Id }}" class="todo-item">
+          <label>
+            <input type="checkbox"> {{ .Content }} 
+          </label>
+          <button hx-delete="/delete/later/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
+        </li>
         {{ end }}
       </ul>
       <div class="add-item">
