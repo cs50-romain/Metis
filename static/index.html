@@ -105,7 +105,7 @@
 
   <div class="todo-container">
     <div class="todo-box">
-      <div class="todo-category">Category 1</div>
+      <div class="todo-category">Important</div>
       <ul class="todo-list">
         {{ range .ImportantTasks }}
         <li id="{{ .Id }}" class="todo-item">
@@ -123,7 +123,7 @@
     </div>
 
     <div class="todo-box">
-      <div class="todo-category">Category 2</div>
+      <div class="todo-category">Minor</div>
       <ul class="todo-list">
         {{ range .MinorTasks}}
         <!-- Todo items for Category 2 -->
@@ -131,7 +131,7 @@
           <label>
             <input type="checkbox"> {{ .Content }} 
           </label>
-          <button hx-delete="/delete/minor{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
+          <button hx-delete="/delete/minor/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
         </li>
         {{ end }}
       </ul>
@@ -142,10 +142,10 @@
     </div>
 
     <div class="todo-box">
-      <div class="todo-category">Category 3</div>
+      <div class="todo-category">For Later</div>
       <ul class="todo-list">
         {{ range .LaterTasks }}
-        <!-- Todo items for Category 3 -->
+        <!-- Todo items for For Later -->
         <li id="{{ .Id }}" class="todo-item">
           <label>
             <input type="checkbox"> {{ .Content }} 
