@@ -61,6 +61,11 @@
       margin-right: 10px;
     }
 
+    .todo-item label input[type="checkbox"]:checked + span {
+      text-decoration: line-through;
+      color: #888;
+    }
+
     .todo-item button {
       background-color: #ff6961;
       color: #fff;
@@ -110,7 +115,7 @@
         {{ range .ImportantTasks }}
         <li id="{{ .Id }}" class="todo-item">
           <label>
-            <input type="checkbox"> {{ .Content }} 
+            <input type="checkbox"> <span>{{ .Content }}</span> 
           </label>
           <button hx-delete="/delete/important/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
         </li>
@@ -129,7 +134,7 @@
         <!-- Todo items for Category 2 -->
         <li id="{{ .Id }}" class="todo-item">
           <label>
-            <input type="checkbox"> {{ .Content }} 
+            <input type="checkbox"><span>{{ .Content }}</span>
           </label>
           <button hx-delete="/delete/minor/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
         </li>
@@ -148,7 +153,7 @@
         <!-- Todo items for For Later -->
         <li id="{{ .Id }}" class="todo-item">
           <label>
-            <input type="checkbox"> {{ .Content }} 
+            <input type="checkbox"><span>{{ .Content }}</span>
           </label>
           <button hx-delete="/delete/later/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="this" hx-swap="delete">Delete</button>
         </li>

@@ -79,7 +79,7 @@ func AddItem(w http.ResponseWriter, r *http.Request, importance string) {
 			}
 
 			go saveFile()
-			htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label>\n<input type='checkbox'>%s\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, content, importance, newid)
+			htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label>\n<input type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, content, importance, newid)
 			tmpl, _ := template.New("t").Parse(htmlEl)
 			tmpl.Execute(w, nil)
 		}
