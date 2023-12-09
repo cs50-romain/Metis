@@ -15,6 +15,7 @@ import (
 var itasks []Task
 var mtasks []Task
 var ltasks []Task
+var ctasks []Task
 
 const PATH_SEP_WINDOWS = '\\'
 const PATH_SEP_LINUX = '/'	
@@ -23,12 +24,13 @@ type Tasks struct {
 	Itasks	[]Task
 	Mtasks	[]Task
 	Ltasks	[]Task
+	Ctasks	[]Task
 }
 
 type Task struct {
 	Id		int
 	Content		string
-	isCompleted	bool
+	IsCompleted	bool
 	CreatedAt	time.Time
 	Importance	string
 }
@@ -53,6 +55,8 @@ func Route(w http.ResponseWriter, r *http.Request) {
 		AddItem(w, r, importance)
 	} else if urlpath == "delete" {
 		DeleteItem(w, r)
+	} else if urlpath == "itemcompleted" {
+		ItemCompleted(w, r, requestpath)
 	} else {
 		log.Printf("Invalid Path Request: %s\n", r.URL.Path)
 		http.Error(w, "Invalid Path Request", http.StatusBadRequest)
@@ -79,7 +83,7 @@ func AddItem(w http.ResponseWriter, r *http.Request, importance string) {
 			}
 
 			go saveFile()
-			htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label>\n<input type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, content, importance, newid)
+			htmlEl := fmt.Sprintf("<li id=%b class='todo-item' hx-trigger='change delay:2s' hx-target='#completed-box' hx-include='this' hx-post='/itemcompleted/%s/%b' hx-swap='beforeend'>\n<label>\n<input hx-delete='/delete/important/%b' hx-trigger='click delay:4s' hx-target='closest li' hx-swap='delete' type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, importance, newid, newid, content, importance, newid)
 			tmpl, _ := template.New("t").Parse(htmlEl)
 			tmpl.Execute(w, nil)
 		}
@@ -93,7 +97,7 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	taskId := path[len(path)-1]
 	id, err := strconv.Atoi(taskId)
 
-	log.Printf("INFO: Object information -> id:%b, importance:%s task:%s", id, importance)
+	log.Printf("INFO: Object information -> id:%b, importance:%s", id, importance)
 
 	if err != nil {
 		log.Print("ERROR (line 94): String Conversion Error:", err)
@@ -102,9 +106,11 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	if importance == "important" {
 		for idx, task := range itasks {
 			if task.Id == id {
-				log.Print("INFO: Found related task:", task)
-				itasks = append(itasks[:idx], itasks[idx+1:]...)
-				log.Print("INFO: New itasks:", itasks)
+				if len(itasks) > 1 {
+					itasks = append(itasks[:idx], itasks[idx+1:]...)
+				}
+
+				itasks = []Task{}
 			}
 		}
 	} else if importance == "minor" {
@@ -130,10 +136,32 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	saveFile()
 }
 
+func ItemCompleted(w http.ResponseWriter, r *http.Request, path []string) {
+	log.Print("[INFO] ItemCompleted request received.")
+	task_id_str := path[len(path)-1]
+	task_id, _ := strconv.Atoi(task_id_str)
+	importance := path[len(path)-2]
+
+	task := GetTask(importance, task_id)
+	task.IsCompleted = true
+	task.Importance = "completed"
+	task.CreatedAt = time.Now()
+	//DeleteTask(importance, task_id)
+	AddTaskToList(task, "completed")
+
+	year, month, day := task.CreatedAt.Date()
+
+	htmlEl := fmt.Sprintf("<li id=%b class='todo-item'>\n<label><span>%s</span><span style='font-size: 10px;'>  on:%v-%v-%v</span>\n</label>\n</li>", task.Id, task.Content, year, month, day)
+
+	tmpl, _ := template.New("t").Parse(htmlEl)
+	tmpl.Execute(w, nil)
+}
+
 func index(w http.ResponseWriter, r *http.Request) {
 	log.Print("Index request received")
 	tmpl := template.Must(template.ParseFiles("./static/index.html"))
 
+	// ADD COMPLETED TASKS HERE
 	itasks = FixId(itasks)
 	mtasks = FixId(mtasks)
 	ltasks = FixId(ltasks)
@@ -142,10 +170,12 @@ func index(w http.ResponseWriter, r *http.Request) {
 		ImportantTasks	[]Task
 		MinorTasks	[]Task
 		LaterTasks	[]Task
+		CompletedTasks	[]Task
 	}{
 		ImportantTasks: itasks,
 		MinorTasks: mtasks,
 		LaterTasks: ltasks,
+		CompletedTasks: ctasks,
 	}
 
 	tmpl.Execute(w, data)
@@ -157,6 +187,7 @@ func saveFile() {
 		Itasks: itasks,
 		Mtasks: mtasks,
 		Ltasks: ltasks,
+		Ctasks: ctasks,
 	}
 
 	b, err := json.Marshal(tasks)
@@ -179,6 +210,77 @@ func saveFile() {
 	}
 }
 
+func GetTask(importance string, task_id int) Task {
+	if importance == "important" {
+		for idx, task := range itasks {
+			if task.Id == task_id {
+				return itasks[idx]
+			}
+		}
+	} else if importance == "minor" {
+		for idx, task := range mtasks {
+			if task.Id == task_id {
+				return mtasks[idx]
+			}
+		}
+	} else if importance == "later" {
+		for idx, task := range ltasks {
+			if task.Id == task_id {
+				return ltasks[idx]
+			}
+		}
+	} else {
+		log.Printf("Error; Could not find importance type for: %s\n", importance)
+		return Task{}
+	}
+	return Task{} 
+}
+
+func DeleteTask(importance string, task_id int) {
+	if importance == "important" {
+		for idx, task := range itasks {
+			if task.Id == task_id {
+				log.Print("INFO: Found related task:", task)
+				itasks = append(itasks[:idx], itasks[idx+1:]...)
+				log.Print("INFO: New itasks:", itasks)
+			}
+		}
+	} else if importance == "minor" {
+		for idx, task := range mtasks {
+			if task.Id == task_id {
+				mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
+			}
+		}
+	} else if importance == "later" {
+		for idx, task := range ltasks {
+			if task.Id == task_id {
+				log.Print("INFO: Found related task:", task)
+				ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
+				log.Print("INFO: New ltasks:", ltasks)
+			}
+		}
+	} else {
+		log.Printf("Error; Could not find importance type for: %s\n", importance)
+	}
+
+	itasks = FixId(itasks)
+	mtasks = FixId(mtasks)
+	ltasks = FixId(ltasks)
+	saveFile()
+}
+
+func AddTaskToList(task Task, importance string) {	
+	if importance == "important" {
+		itasks = append(itasks, task)
+	} else if importance == "minor" {
+		mtasks = append(mtasks, task)
+	} else if importance == "later" {
+		ltasks = append(ltasks, task)
+	} else if importance == "completed" {
+		ctasks = append(ctasks, task)
+	}
+}
+
 func prefill() {
 	var tasks Tasks
 	b, err := os.ReadFile("./data.json")
@@ -190,10 +292,12 @@ func prefill() {
 	itasks = tasks.Itasks
 	mtasks = tasks.Mtasks
 	ltasks = tasks.Ltasks
+	ctasks = tasks.Ctasks
 
 	itasks = FixId(itasks)
 	mtasks = FixId(mtasks)
 	ltasks = FixId(ltasks)
+	ctasks = FixId(ctasks)
 
 	// AFTER PREFILLING, CHECK DATES AND SEE IF AN OBJECT NEEDS TO SWITCH
 	// CHECK EACH TASK LISTS AND MOVE TASK ACCORDINGLY IF NEEDED
