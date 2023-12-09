@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"os"
-	"net/http"
 	"log"
-	"strings"
+	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	session "github.com/cs50-romain/Metis/util"
+	//"github.com/cs50-romain/Metis/util"
 )
 
 var itasks []Task
@@ -43,6 +46,10 @@ func empty(content string) bool{
 	return false
 }
 
+func sessionMiddleWare() {
+
+}
+
 func Route(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request received for %s; Routing...\n", r.URL.Path)
 	requestpath := strings.Split(r.URL.Path, "/")
@@ -51,7 +58,11 @@ func Route(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/" {
 		index(w, r)
-	} else if urlpath == "add-item" {
+	} else if urlpath == "login" {
+		loginHandler(w, r)	
+	} else if urlpath == "loginform" {
+		loginFormHandler(w, r)
+	}else if urlpath == "add-item" {
 		AddItem(w, r, importance)
 	} else if urlpath == "delete" {
 		DeleteItem(w, r)
@@ -60,6 +71,21 @@ func Route(w http.ResponseWriter, r *http.Request) {
 	} else {
 		log.Printf("Invalid Path Request: %s\n", r.URL.Path)
 		http.Error(w, "Invalid Path Request", http.StatusBadRequest)
+	}
+}
+
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "./static/login.html")
+}
+
+func loginFormHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		username := r.PostFormValue("username")
+		//userpass := r.PostFormValue("password")
+		
+		session.CreateSession(0, username)
+
+		http.Redirect(w, r, "/", 302)
 	}
 }
 
@@ -355,7 +381,6 @@ func compareDate(date time.Time) int{
 		return -1
 		//return time.Now().Year() - date.Year() + 365 
 	}
-	return -1
 }
 
 func FixId(array []Task) []Task {
