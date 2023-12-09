@@ -384,12 +384,12 @@ func main() {
 TODO
 1. Add ability to search for a youtube video. Make window a little bit bigger and in the future resizable - TOMORROW
 2. Save json to file: import and export the json data. - 2023-12-04 -> DONE 
-3. Session per client connection - THURSDAY
-4. Keyboard shortcuts - STARTED (functionality is there, just not pretty)
+3. Session per client connection - SATURDAY
+4. Keyboard shortcuts - STARTED (functionality is there, just not pretty) -> 12/08/2023 - REMOVED FOR NOW
 5. Draggable task items (within flex and from one flex, like from Later section to Important to another)
 6. Move items from Later to Minor after 4 days - 2023-12-05 -> DONE 
 7. Move items from Minor to Important after 7 days - 12/05/2023 -> DONE
-8. Add ability to delete items/tasks - 12/06/2023 -> FRONTEND DONE / WORKING ON BACKEND 
-9. Add ability to mark task as completed (add sound effect) - TOMORROW
+8. Add ability to delete items/tasks - 12/06/2023 - FRONTEND DONE / WORKING ON BACKEND -> 12/08/2023 - DONE 
+9. Add ability to mark task as completed (add sound effect) - TOMORROW -> 12/08/2023 - DONE
 9. Publish website
 */
