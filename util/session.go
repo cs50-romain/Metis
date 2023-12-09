@@ -15,11 +15,12 @@ type Session struct {
 
 var sessions = make(map[uuid.UUID]Session)
 
-func CreateSession(userid int, username string) string {
+func CreateSession(username string) string {
+	lensession := len(sessions)
 	sessionId := generateSessionId()
 
 	newSession := Session{
-		UserID: userid,
+		UserID: lensession, 
 		UserName: username,
 		ExpiresAt: time.Now().Add(time.Hour * 24 * 10),
 		UserData: []any{},

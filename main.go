@@ -83,7 +83,7 @@ func loginFormHandler(w http.ResponseWriter, r *http.Request) {
 		username := r.PostFormValue("username")
 		//userpass := r.PostFormValue("password")
 		
-		session.CreateSession(0, username)
+		session.CreateSession(username)
 
 		http.Redirect(w, r, "/", 302)
 	}
