@@ -26,52 +26,69 @@ func empty(content string) bool{
 	return false
 }
 
-func sessionMiddleWare() {
+func sessionMiddleware(r *http.Request) *session.Session {
+	// Do you have an exisiting session?
+		// If not expired -> return the session
+		// If expired, delete the session and return nil -> route will then redirect to the login page
+	// If no existing session -> return nil and route will redirect to login page
+	sessionID, err := getSessionIdCookie(r)
+	if err != nil {
+		log.Println("[ERROR] -> ", err)
+	}
 
+	if sessionID.String() != "" {
+		session_pointer, ok := session.GetSession(strings.TrimLeft(sessionID.String(), "sessionID="))
+		if ok && session_pointer.ExpiresAt.After(time.Now()) {
+			return session_pointer
+		} else {
+			session.DeleteSession(strings.TrimLeft(sessionID.String(), "sessionID="))
+			session.Save()
+			return nil
+		}
+	} else {
+		return nil
+	}
 }
 
 func Route(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[REQUEST] for %s; Routing...\n\n", r.URL.Path)
+	log.Printf("[REQUEST] for %s; Routing...\n", r.URL.Path)
 	requestpath := strings.Split(r.URL.Path, "/")
 	urlpath := requestpath[1]
 	importance := requestpath[len(requestpath)-1]
+	var session_pointer *session.Session
 
 	if urlpath == "loginform" {
 		loginFormHandler(w, r)
+	} else {
+		session_pointer = sessionMiddleware(r)
 	}
 
-	sessionID, err := getSessionIdCookie(r)
-
-	if err != nil {
-		log.Println("[ERROR] ", err)
+	if session_pointer == nil {
+		log.Println("[INFO] Redirecting to /login")
 		loginHandler(w, r)
 		return
+	} else { 
+		if r.URL.Path == "/" {
+			index(w, r, session_pointer)
+		} else if urlpath == "login" {
+			loginHandler(w, r)
+		}else if urlpath == "add-item" {
+			AddItem(w, r, importance, session_pointer)
+			session.Save()
+		} else if urlpath == "delete" {
+			DeleteItem(w, r, session_pointer)
+			session.Save()
+		} else if urlpath == "itemcompleted" {
+			ItemCompleted(w, r, requestpath, session_pointer)
+			session.Save()
+		} else {
+			log.Printf("Invalid Path Request: %s\n", r.URL.Path)
+			http.Error(w, "Invalid Path Request", http.StatusBadRequest)
+		}
 	}
-
-	fmt.Println("Getting session....")
-	session, ok := session.GetSession(strings.TrimLeft(sessionID.String(), "sessionID="))
-	if !ok {
-		log.Print("[INFO] Could not find valid session\n", session)
-	}
-	fmt.Println("Got this session:", session)
-
-	if r.URL.Path == "/" {
-		index(w, r, session)
-	} else if urlpath == "login" {
-		loginHandler(w, r)	
-	} else if urlpath == "loginform" {
-		//loginFormHandler(w, r)
-	}else if urlpath == "add-item" {
-		AddItem(w, r, importance, session)
-		fmt.Println("After AddItem function:", session)
-	} else if urlpath == "delete" {
-		DeleteItem(w, r, session)
-	} else if urlpath == "itemcompleted" {
-		ItemCompleted(w, r, requestpath, session)
-	} else {
-		log.Printf("Invalid Path Request: %s\n", r.URL.Path)
-		http.Error(w, "Invalid Path Request", http.StatusBadRequest)
-	}
+	fmt.Print("End of route -> showing sessions data:")
+	session.Print()
+	fmt.Println()
 }
 
 func AddItem(w http.ResponseWriter, r *http.Request, importance string, session *session.Session) {
@@ -208,38 +225,25 @@ func loginFormHandler(w http.ResponseWriter, r *http.Request) {
 		username := r.PostFormValue("username")
 		//userpass := r.PostFormValue("password")
 		
-		sessionid := session.CreateSession(username)
-		http.SetCookie(w, &http.Cookie{
-			Name:	"sessionID",
-			Value:	sessionid,
-			Expires: time.Now().Add(time.Hour * 24 * 10),
-		})
+		// check if session id alread exists, if so redirect
+		session_pointer := sessionMiddleware(r)
+		if session_pointer != nil {
+			log.Println("[TESTING] found a common sessionid")
+			http.Redirect(w, r, "/", 302)
+		} else {
+			sessionid := session.CreateSession(username)
+			http.SetCookie(w, &http.Cookie{
+				Name:	"sessionID",
+				Value:	sessionid,
+				Expires: time.Now().Add(time.Hour * 24 * 10),
+			})
+			session.Save()
 
-		http.Redirect(w, r, "/", 302)
+			http.Redirect(w, r, "/", 302)
+		}
 	}
 }
 
-func sessionMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        sessionID, err := getSessionIdCookie(r)
-	if err != nil {
-		log.Println("[ERROR] ", err)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-	}
-
-        if sessionID.String() != "" {
-            session, exists := session.GetSession(sessionID.String())
-            if exists && session.ExpiresAt.After(time.Now()) {
-                // Session is valid, continue with the request
-                next.ServeHTTP(w, r)
-                return
-            }
-        }
-
-        // If session is not valid, redirect to login or handle accordingly
-        http.Redirect(w, r, "/login", http.StatusSeeOther)
-    })
-}
 
 func getSessionIdCookie(r *http.Request) (*http.Cookie, error) {
 	return r.Cookie("sessionID")
@@ -289,6 +293,8 @@ func saveFile(session *session.Session) {
 func main() {
 	fmt.Println("[+] Decoding json information if any...")
 	//prefill()
+	session.PreFillSessions()
+	session.Print()
 
 	fmt.Println("[+] Starting web server...")
 
