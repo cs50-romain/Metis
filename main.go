@@ -11,32 +11,12 @@ import (
 	"strings"
 	"time"
 
-	session "github.com/cs50-romain/Metis/util"
-	//"github.com/cs50-romain/Metis/util"
+	"github.com/cs50-romain/Metis/util/session"
+	ttask "github.com/cs50-romain/Metis/util/task"
 )
-
-var itasks []Task
-var mtasks []Task
-var ltasks []Task
-var ctasks []Task
 
 const PATH_SEP_WINDOWS = '\\'
 const PATH_SEP_LINUX = '/'	
-
-type Tasks struct {
-	Itasks	[]Task
-	Mtasks	[]Task
-	Ltasks	[]Task
-	Ctasks	[]Task
-}
-
-type Task struct {
-	Id		int
-	Content		string
-	IsCompleted	bool
-	CreatedAt	time.Time
-	Importance	string
-}
 
 func empty(content string) bool{
 	if content == "" || content == " " {
@@ -51,45 +31,51 @@ func sessionMiddleWare() {
 }
 
 func Route(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Request received for %s; Routing...\n", r.URL.Path)
+	log.Printf("[REQUEST] for %s; Routing...\n\n", r.URL.Path)
 	requestpath := strings.Split(r.URL.Path, "/")
 	urlpath := requestpath[1]
 	importance := requestpath[len(requestpath)-1]
 
+	if urlpath == "loginform" {
+		loginFormHandler(w, r)
+	}
+
+	sessionID, err := getSessionIdCookie(r)
+
+	if err != nil {
+		log.Println("[ERROR] ", err)
+		loginHandler(w, r)
+		return
+	}
+
+	fmt.Println("Getting session....")
+	session, ok := session.GetSession(strings.TrimLeft(sessionID.String(), "sessionID="))
+	if !ok {
+		log.Print("[INFO] Could not find valid session\n", session)
+	}
+	fmt.Println("Got this session:", session)
+
 	if r.URL.Path == "/" {
-		index(w, r)
+		index(w, r, session)
 	} else if urlpath == "login" {
 		loginHandler(w, r)	
 	} else if urlpath == "loginform" {
-		loginFormHandler(w, r)
+		//loginFormHandler(w, r)
 	}else if urlpath == "add-item" {
-		AddItem(w, r, importance)
+		AddItem(w, r, importance, session)
+		fmt.Println("After AddItem function:", session)
 	} else if urlpath == "delete" {
-		DeleteItem(w, r)
+		DeleteItem(w, r, session)
 	} else if urlpath == "itemcompleted" {
-		ItemCompleted(w, r, requestpath)
+		ItemCompleted(w, r, requestpath, session)
 	} else {
 		log.Printf("Invalid Path Request: %s\n", r.URL.Path)
 		http.Error(w, "Invalid Path Request", http.StatusBadRequest)
 	}
 }
 
-func loginHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "./static/login.html")
-}
-
-func loginFormHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		username := r.PostFormValue("username")
-		//userpass := r.PostFormValue("password")
-		
-		session.CreateSession(username)
-
-		http.Redirect(w, r, "/", 302)
-	}
-}
-
-func AddItem(w http.ResponseWriter, r *http.Request, importance string) {
+func AddItem(w http.ResponseWriter, r *http.Request, importance string, session *session.Session) {
+	fmt.Println("Adding item to:", session)
 	if r.Method == "POST" {
 		var newid int
 		content := r.PostFormValue("content")
@@ -98,26 +84,27 @@ func AddItem(w http.ResponseWriter, r *http.Request, importance string) {
 			http.Error(w, "No content", http.StatusBadRequest)
 		} else {
 			if importance == "important" {
-				newid = len(itasks)
-				itasks = append(itasks, Task{len(itasks), content, false, time.Now(), "later"})
+				newid = len(session.UserData.Itasks)
+				session.UserData.AddTaskToList(ttask.Task{len(session.UserData.Itasks), content, false, time.Now(), "important"}, importance)
 			} else if importance == "minor" {
-				newid = len(mtasks)
-				mtasks = append(mtasks, Task{len(mtasks), content, false, time.Now(), "later"})
+				newid = len(session.UserData.Mtasks)
+				session.UserData.AddTaskToList(ttask.Task{len(session.UserData.Mtasks), content, false, time.Now(), "minor"}, importance)
 			} else if importance == "later" {
-				newid = len(ltasks)
-				ltasks = append(ltasks, Task{len(ltasks), content, false, time.Now(), "later"})
+				newid = len(session.UserData.Ltasks)
+				session.UserData.AddTaskToList(ttask.Task{len(session.UserData.Ltasks), content, false, time.Now(), "later"}, importance)
 			}
 
-			go saveFile()
 			htmlEl := fmt.Sprintf("<li id=%b class='todo-item' hx-trigger='change delay:2s' hx-target='#completed-box' hx-include='this' hx-post='/itemcompleted/%s/%b' hx-swap='beforeend'>\n<label>\n<input hx-delete='/delete/important/%b' hx-trigger='click delay:4s' hx-target='closest li' hx-swap='delete' type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, importance, newid, newid, content, importance, newid)
 			tmpl, _ := template.New("t").Parse(htmlEl)
 			tmpl.Execute(w, nil)
 		}
+		fmt.Println("Session's data:", session)
+		saveFile(session)
 	}
 }
 
-func DeleteItem(w http.ResponseWriter, r *http.Request) {
-	log.Print("INFO: Delete request received")
+func DeleteItem(w http.ResponseWriter, r *http.Request, session *session.Session) {
+	log.Print("[REQUEST] from Route to /delete")
 	path := strings.Split(r.URL.Path, "/")
 	importance := path[len(path)-2]
 	taskId := path[len(path)-1]
@@ -130,50 +117,51 @@ func DeleteItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if importance == "important" {
-		for idx, task := range itasks {
-			if task.Id == id {
-				if len(itasks) > 1 {
-					itasks = append(itasks[:idx], itasks[idx+1:]...)
+		for idx, object := range session.UserData.Itasks {
+			if object.Id == id {
+				if len(session.UserData.Itasks) > 1 {
+					session.UserData.Itasks = append(session.UserData.Itasks[:idx], session.UserData.Itasks[idx+1:]...)
+				} else {
+					session.UserData.Itasks = []ttask.Task{}
 				}
-
-				itasks = []Task{}
 			}
 		}
 	} else if importance == "minor" {
-		for idx, task := range mtasks {
-			if task.Id == id {
-				mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
+		for idx, object := range session.UserData.Mtasks {
+			if object.Id == id {
+				session.UserData.Mtasks = append(session.UserData.Mtasks[:idx], session.UserData.Mtasks[idx+1:]...)
 			}
 		}
 	} else if importance == "later" {
-		for idx, task := range ltasks {
-			if task.Id == id {
-				ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
+		for idx, object := range session.UserData.Ltasks {
+			if object.Id == id {
+				session.UserData.Ltasks = append(session.UserData.Ltasks[:idx], session.UserData.Ltasks[idx+1:]...)
 			}
 		}
 	} else {
 		log.Printf("Error; Could not find importance type for: %s\n", importance)
 	}
 
-	itasks = FixId(itasks)
-	mtasks = FixId(mtasks)
-	ltasks = FixId(ltasks)
+	// FIX ID OF TASKS
+	ttask.FixId(session.UserData.Ltasks)
+	ttask.FixId(session.UserData.Mtasks)
+	ttask.FixId(session.UserData.Itasks)
 
-	saveFile()
+	saveFile(session)
 }
 
-func ItemCompleted(w http.ResponseWriter, r *http.Request, path []string) {
-	log.Print("[INFO] ItemCompleted request received.")
+func ItemCompleted(w http.ResponseWriter, r *http.Request, path []string, session *session.Session) {
+	log.Print("[REQUEST] from Route to /itemcompleted received")
 	task_id_str := path[len(path)-1]
 	task_id, _ := strconv.Atoi(task_id_str)
 	importance := path[len(path)-2]
 
-	task := GetTask(importance, task_id)
+	task := ttask.GetTask(importance, task_id)
 	task.IsCompleted = true
 	task.Importance = "completed"
 	task.CreatedAt = time.Now()
 	//DeleteTask(importance, task_id)
-	AddTaskToList(task, "completed")
+	session.UserData.AddTaskToList(task, "completed")
 
 	year, month, day := task.CreatedAt.Date()
 
@@ -181,227 +169,130 @@ func ItemCompleted(w http.ResponseWriter, r *http.Request, path []string) {
 
 	tmpl, _ := template.New("t").Parse(htmlEl)
 	tmpl.Execute(w, nil)
+	saveFile(session)
 }
 
-func index(w http.ResponseWriter, r *http.Request) {
-	log.Print("Index request received")
+func index(w http.ResponseWriter, r *http.Request, session *session.Session) {
+	log.Print("[REQUEST] from Route to index received.")
 	tmpl := template.Must(template.ParseFiles("./static/index.html"))
+	ttask.Prefill(session.UserData)
 
-	// ADD COMPLETED TASKS HERE
-	itasks = FixId(itasks)
-	mtasks = FixId(mtasks)
-	ltasks = FixId(ltasks)
+	// FIX ID OF TASKS
+	ttask.FixId(session.UserData.Ltasks)
+	ttask.FixId(session.UserData.Mtasks)
+	ttask.FixId(session.UserData.Itasks)
 
 	data := struct {
-		ImportantTasks	[]Task
-		MinorTasks	[]Task
-		LaterTasks	[]Task
-		CompletedTasks	[]Task
+		ImportantTasks	[]ttask.Task
+		MinorTasks	[]ttask.Task
+		LaterTasks	[]ttask.Task
+		CompletedTasks	[]ttask.Task
 	}{
-		ImportantTasks: itasks,
-		MinorTasks: mtasks,
-		LaterTasks: ltasks,
-		CompletedTasks: ctasks,
+		ImportantTasks: session.UserData.Itasks,
+		MinorTasks: session.UserData.Mtasks,
+		LaterTasks: session.UserData.Ltasks,
+		CompletedTasks: session.UserData.Ctasks,
 	}
 
 	tmpl.Execute(w, data)
 }
 
-func saveFile() {
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("[REQUEST] from Route to /login")
+	http.ServeFile(w, r, "./static/login.html")
+}
+
+func loginFormHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("[REQUEST] from Route to /loginform")
+	if r.Method == "POST" {
+		username := r.PostFormValue("username")
+		//userpass := r.PostFormValue("password")
+		
+		sessionid := session.CreateSession(username)
+		http.SetCookie(w, &http.Cookie{
+			Name:	"sessionID",
+			Value:	sessionid,
+			Expires: time.Now().Add(time.Hour * 24 * 10),
+		})
+
+		http.Redirect(w, r, "/", 302)
+	}
+}
+
+func sessionMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        sessionID, err := getSessionIdCookie(r)
+	if err != nil {
+		log.Println("[ERROR] ", err)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}
+
+        if sessionID.String() != "" {
+            session, exists := session.GetSession(sessionID.String())
+            if exists && session.ExpiresAt.After(time.Now()) {
+                // Session is valid, continue with the request
+                next.ServeHTTP(w, r)
+                return
+            }
+        }
+
+        // If session is not valid, redirect to login or handle accordingly
+        http.Redirect(w, r, "/login", http.StatusSeeOther)
+    })
+}
+
+func getSessionIdCookie(r *http.Request) (*http.Cookie, error) {
+	return r.Cookie("sessionID")
+}
+
+func saveFile(session *session.Session) {
 	// Once sessions are created, check to see if the session is inactive, if so save the file and exit.
-	tasks := Tasks{
-		Itasks: itasks,
-		Mtasks: mtasks,
-		Ltasks: ltasks,
-		Ctasks: ctasks,
+	tasks := ttask.Tasks{
+		Itasks: session.UserData.Itasks,
+		Mtasks: session.UserData.Mtasks,
+		Ltasks: session.UserData.Ltasks,
+		Ctasks: session.UserData.Ctasks,
 	}
 
 	b, err := json.Marshal(tasks)
 	if err != nil {
-		log.Print("{!] Couldn't save file, retrying in...")
+		log.Print("[INFO] Couldn't save file, retrying in...")
 	} else {
-		fmt.Println("[+] File saved")
+		fmt.Println("[INFO] File saved")
 	}
 
 	if os.PathSeparator == PATH_SEP_WINDOWS {
-		err = os.WriteFile("C:\\Program Files\\Metis\\data.json", b, 0644)
+		err = os.WriteFile("C:\\Program Files\\Metis\\data.json", b, 0777)
 		if err != nil {
-			log.Print("[!] Error saving to file")
+			log.Print("[ERROR] Error saving to file")
 		}
 	} else {
-		err = os.WriteFile("./data.json", b, 0644)
+		file_saving_location := "./data/" + session.UserName
+		if _, err := os.Stat(file_saving_location); err != nil {
+		    if os.IsNotExist(err) {
+			direrr := os.Mkdir(file_saving_location, 0777)
+			if direrr != nil {
+				log.Print("[ERROR] Could not create directory: ", direrr)
+			}
+		    } else {
+			log.Print("[ERROR] Path error for os.Stat")
+		    }
+		}
+
+		err = os.WriteFile(file_saving_location + "/data.json", b, 0644)
 		if err != nil {
-			log.Print("[!] Error saving to file")
+			log.Print("[ERROR] Error saving to file -> ", err)
 		}
 	}
-}
-
-func GetTask(importance string, task_id int) Task {
-	if importance == "important" {
-		for idx, task := range itasks {
-			if task.Id == task_id {
-				return itasks[idx]
-			}
-		}
-	} else if importance == "minor" {
-		for idx, task := range mtasks {
-			if task.Id == task_id {
-				return mtasks[idx]
-			}
-		}
-	} else if importance == "later" {
-		for idx, task := range ltasks {
-			if task.Id == task_id {
-				return ltasks[idx]
-			}
-		}
-	} else {
-		log.Printf("Error; Could not find importance type for: %s\n", importance)
-		return Task{}
-	}
-	return Task{} 
-}
-
-func DeleteTask(importance string, task_id int) {
-	if importance == "important" {
-		for idx, task := range itasks {
-			if task.Id == task_id {
-				log.Print("INFO: Found related task:", task)
-				itasks = append(itasks[:idx], itasks[idx+1:]...)
-				log.Print("INFO: New itasks:", itasks)
-			}
-		}
-	} else if importance == "minor" {
-		for idx, task := range mtasks {
-			if task.Id == task_id {
-				mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
-			}
-		}
-	} else if importance == "later" {
-		for idx, task := range ltasks {
-			if task.Id == task_id {
-				log.Print("INFO: Found related task:", task)
-				ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
-				log.Print("INFO: New ltasks:", ltasks)
-			}
-		}
-	} else {
-		log.Printf("Error; Could not find importance type for: %s\n", importance)
-	}
-
-	itasks = FixId(itasks)
-	mtasks = FixId(mtasks)
-	ltasks = FixId(ltasks)
-	saveFile()
-}
-
-func AddTaskToList(task Task, importance string) {	
-	if importance == "important" {
-		itasks = append(itasks, task)
-	} else if importance == "minor" {
-		mtasks = append(mtasks, task)
-	} else if importance == "later" {
-		ltasks = append(ltasks, task)
-	} else if importance == "completed" {
-		ctasks = append(ctasks, task)
-	}
-}
-
-func prefill() {
-	var tasks Tasks
-	b, err := os.ReadFile("./data.json")
-	err = json.Unmarshal(b, &tasks)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	itasks = tasks.Itasks
-	mtasks = tasks.Mtasks
-	ltasks = tasks.Ltasks
-	ctasks = tasks.Ctasks
-
-	itasks = FixId(itasks)
-	mtasks = FixId(mtasks)
-	ltasks = FixId(ltasks)
-	ctasks = FixId(ctasks)
-
-	// AFTER PREFILLING, CHECK DATES AND SEE IF AN OBJECT NEEDS TO SWITCH
-	// CHECK EACH TASK LISTS AND MOVE TASK ACCORDINGLY IF NEEDED
-	swapTasksBasedOnDate()
-}
-
-func swapTasksBasedOnDate() {
-	for idx, object := range mtasks {
-		//log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
-		if compareDate(object.CreatedAt) >= 7 {
-			object.Importance = "important"
-			itasks = append(itasks, object)
-			mtasks = append(mtasks[:idx], mtasks[idx+1:]...)
-		}
-	}
-
-	for idx, object := range ltasks {
-		//log.Printf("Object %s creation Date:%s\t Current Date:%s", object.Content, object.CreatedAt.String(), time.Now().String())
-		if compareDate(object.CreatedAt) >= 4 {
-			object.Importance = "minor"
-			mtasks = append(mtasks, object)
-			ltasks = append(ltasks[:idx], ltasks[idx+1:]...)
-		}
-	}
-}
-
-// compareDate 2 DATES (DATE1 AND TIME.NOW()) AND RETURN AN INTEGER - INTEGER WILL BE HOW MANY DAYS DATE1 IS FROM TIME.NOW()
-func compareDate(date time.Time) int{
-	if date.Year() == time.Now().Year() {
-		if date.Month() == time.Now().Month() {
-			return time.Now().Day() - date.Day()
-		} else {
-			monthDiff := int(time.Now().Month()) - int(date.Month())
-			startOfMonth := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.UTC)
-			var daysTillEndOfMonth int = 0 
-			if monthDiff <= 1 {
-				if date.Month() == time.January || date.Month() == time.March || date.Month() == time.May || date.Month() == time.July || date.Month() == time.August || date.Month() == time.October || date.Month() == time.December {
-					daysTillEndOfMonth = 31 - date.Day()
-				} else if date.Month() == time.February {
-					if date.Year() / 2 == 0 {
-						daysTillEndOfMonth = 29 - date.Day() + 1
-					} else {
-						daysTillEndOfMonth = 28 - date.Day() + 1
-					}
-					
-				} else {
-					daysTillEndOfMonth = 30 - date.Day() + 1
-				}
-				return time.Now().Day() - startOfMonth.Day() + daysTillEndOfMonth 
-			} else {
-				return -1
-			}
-		}
-	} else {
-		return -1
-		//return time.Now().Year() - date.Year() + 365 
-	}
-}
-
-func FixId(array []Task) []Task {
-	if array == nil {
-		return array
-	}
-
-	for idx,_ := range array {
-		array[idx].Id = idx
-	}
-	return array
 }
 
 func main() {
 	fmt.Println("[+] Decoding json information if any...")
-	prefill()
+	//prefill()
 
 	fmt.Println("[+] Starting web server...")
 
 	http.HandleFunc("/", Route)
-
 	log.Print(http.ListenAndServe(":8080", nil))
 }
 
@@ -409,7 +300,7 @@ func main() {
 TODO
 1. Add ability to search for a youtube video. Make window a little bit bigger and in the future resizable - TOMORROW
 2. Save json to file: import and export the json data. - 2023-12-04 -> DONE 
-3. Session per client connection - SATURDAY
+3. Session per client connection - 2023-12-09 -> 
 4. Keyboard shortcuts - STARTED (functionality is there, just not pretty) -> 12/08/2023 - REMOVED FOR NOW
 5. Draggable task items (within flex and from one flex, like from Later section to Important to another)
 6. Move items from Later to Minor after 4 days - 2023-12-05 -> DONE 
