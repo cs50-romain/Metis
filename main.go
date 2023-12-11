@@ -41,7 +41,8 @@ func sessionMiddleware(r *http.Request) *session.Session {
 		if ok && session_pointer.ExpiresAt.After(time.Now()) {
 			return session_pointer
 		} else {
-			if !ok && !session_pointer.ExpiresAt.After(time.Now()) {
+			// ERROR HERE
+			if ok && !session_pointer.ExpiresAt.After(time.Now()) {
 				session.DeleteSession(strings.TrimLeft(sessionID.String(), "sessionID="))
 				session.Save()
 				return nil
@@ -235,7 +236,7 @@ func loginFormHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println("[TESTING] found a common sessionid")
 			http.Redirect(w, r, "/", 302)
 		} else {
-			if session_pointer.ExpiresAt.After(time.Now()) {
+			if session_pointer != nil && session_pointer.ExpiresAt.After(time.Now()) {
 				// Cookie is expired
 				if username == session_pointer.UserName {
 					session_pointer.ExpiresAt = time.Now().Add(time.Hour * 24 * 10)		
