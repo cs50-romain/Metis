@@ -97,9 +97,17 @@ func (t *Tasks) AddTaskToList(task Task, importance string) {
 	}
 }
 
-func Prefill(tasks *Tasks) {
+func getFile() []byte {
 	b, err := os.ReadFile("./data.json")
-	err = json.Unmarshal(b, &tasks)
+	if err != nil {
+		log.Println("[ERROR] Error getting tasks file ->", err)
+	}
+	return b
+}
+
+func Prefill(tasks *Tasks) {
+	b := getFile()
+	err := json.Unmarshal(b, &tasks)
 	if err != nil {
 		log.Println(err)
 	}

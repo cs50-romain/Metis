@@ -58,14 +58,20 @@ func generateSessionId() string {
 	return uuid.New().String()
 }
 
-func PreFillSessions() {
-	fmt.Println("Pre filling sessions map")
+// Can write test for this
+func getFile() []byte{
 	b, err := os.ReadFile("./session-data/session-data.json")
 	if err != nil {
 		log.Println("[ERROR] PreFillSessions ReadFile error -> ", err)
 	}
+	return b
+}
 
-	err = json.Unmarshal([]byte(b), &sessions)
+func PreFillSessions() {
+	fmt.Println("Pre filling sessions map")
+
+	data := getFile()
+	err := json.Unmarshal([]byte(data), &sessions)
 	if err != nil {
 		log.Println("[ERROR] PreFillSessions() -> ", err)
 	}
