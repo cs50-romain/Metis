@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
@@ -11,12 +12,15 @@ import (
 	"strings"
 	"time"
 
+
+	"github.com/go-sql-driver/mysql"
 	"github.com/cs50-romain/Metis/util/session"
 	ttask "github.com/cs50-romain/Metis/util/task"
 )
 
 const PATH_SEP_WINDOWS = '\\'
 const PATH_SEP_LINUX = '/'	
+var db *sql.DB
 
 func empty(content string) bool{
 	if content == "" || content == " " {
@@ -304,6 +308,26 @@ func saveFile(session *session.Session) {
 }
 
 func main() {
+	// Capture connection properties.
+	cfg := mysql.Config{
+		User:   os.Getenv("DBUSER"),
+		Passwd: os.Getenv("DBPASS"),
+		Net:    "tcp",
+		Addr:   "127.0.0.1:3306",
+		DBName: "recordings",
+	}
+	// Get a database handle.
+	var err error
+	db, err = sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pingErr := db.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+	}
+	fmt.Println("Connected!")
 	fmt.Println("[+] Decoding json information if any...")
 	//prefill()
 	session.PreFillSessions()
