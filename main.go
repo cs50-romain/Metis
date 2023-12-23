@@ -258,7 +258,6 @@ func loginFormHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func getSessionIdCookie(r *http.Request) (*http.Cookie, error) {
 	return r.Cookie("sessionID")
 }
