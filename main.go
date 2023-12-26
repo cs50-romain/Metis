@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cs50-romain/Metis/util/session"
+	"github.com/cs50-romain/MetisDeux/util/session"
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 )
 
 var db *sql.DB
+var store session.Store
 
 type Tasks struct {
 	Itasks	[]Task
@@ -159,8 +162,18 @@ func getTasksByImportance(importance string) []Task {
 
 // Middleware
 func AuthFunc(c *gin.Context) {
-	// Get the session passed so the unique identifier passed by sessionId
+	// Get the session_id passed so the unique identifier passed by session_id
+	session_id, err := c.Cookie("session_id")
+	if err != nil {
+		//Cookie has not been set...somehow so set cookie
+	}
 	// If it does not exists, send a forbidden http status and redirect to the login page.
+	session := store.Get(session_id)
+	if session == nil {
+		c.HTML(http.StatusForbidden, "login.html", nil)
+		c.Abort()
+		return
+	}
 
 	c.Next()
 }
@@ -192,6 +205,7 @@ func main() {
 	router.LoadHTMLGlob("static/*")
 
 	// Init the sessions map
+	store = session.Init()
 	// Create the AuthGroup which will include everything except /login and /loginform
 
 	router.POST("/add-item/:importance", addTodoHandler)
