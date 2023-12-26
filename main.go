@@ -13,11 +13,6 @@ import (
 
 var db *sql.DB
 
-var itasks []Task
-var mtasks []Task
-var ltasks []Task
-var ctasks []Task
-
 type Tasks struct {
 	Itasks	[]Task
 	Mtasks	[]Task
@@ -75,6 +70,12 @@ func addTodoHandler(c *gin.Context) {
 }
 
 func indexHandler(c *gin.Context) {
+	var itasks []Task
+	var mtasks []Task
+	var ltasks []Task
+	var ctasks []Task
+
+	// All of these need to get tasks based on the username as well now
 	itasks = getTasksByImportance("high")
 	mtasks = getTasksByImportance("medium")
 	ltasks = getTasksByImportance("low")
@@ -89,6 +90,50 @@ func indexHandler(c *gin.Context) {
 
 func loginHandler(c *gin.Context) {
 	c.File("./static/login.html")
+}
+
+func loginFormHandler(c *gin.Context) {
+	username := c.PostForm("username")
+	if ok := getUsername(username); !ok {
+		// Create a new user and insert in database
+
+		// Create a new session for new user and insert in map
+
+		// Redirect to index.
+	} else {
+		password := c.PostForm("password")
+		if ok := checkPassword(username, password); !ok {
+			// Return an error message for user in login page
+		} else {
+			// Create a new session and store in session map
+
+			// Redirect to index (btw: Index will now need to grab tasks/todos based on the user as well)
+		}
+	}
+}
+
+func getUsername(username string) bool {
+	var user string
+	row := db.QueryRow("SELECT * FROM users WHERE username= ?", username)
+	if err := row.Scan(&user); err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+
+func checkPassword(username, password string) bool {
+	var user string
+	var pass string
+	row := db.QueryRow("SELECT * FROM users WHERE username= ?", username)
+	if err := row.Scan(&user, &pass); err != nil {
+		return false
+	} else {
+		if pass == password {
+			return true
+		}
+		return false
+	}
 }
 
 func getTasksByImportance(importance string) []Task {	
@@ -110,6 +155,14 @@ func getTasksByImportance(importance string) []Task {
 		tasks = append(tasks, task)
 	}
 	return tasks
+}
+
+// Middleware
+func AuthFunc(c *gin.Context) {
+	// Get the session passed so the unique identifier passed by sessionId
+	// If it does not exists, send a forbidden http status and redirect to the login page.
+
+	c.Next()
 }
 
 func main() {
@@ -137,6 +190,9 @@ func main() {
 
 	router := gin.Default()
 	router.LoadHTMLGlob("static/*")
+
+	// Init the sessions map
+	// Create the AuthGroup which will include everything except /login and /loginform
 
 	router.POST("/add-item/:importance", addTodoHandler)
 	router.DELETE("/delete/:importance/:id", deleteItemHandler)
