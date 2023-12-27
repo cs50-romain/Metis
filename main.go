@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -34,8 +35,6 @@ type Task struct {
 func deleteItemHandler(c *gin.Context) {
 	_ = c.Param("importance")
 	id := c.Param("id")
-
-	fmt.Println("Here:", id)
 
 	_, err := db.Exec("DELETE FROM todos WHERE todo_id = ?", id)
 	if err != nil {
@@ -72,10 +71,19 @@ func addTodoHandler(c *gin.Context) {
 
 	fmt.Println(task.Username)
 
-	_, err := db.Exec("INSERT INTO todos (title, description, importance, created_at, username) VALUES(?, ?, ?, ?, ?)", "todo", task.Content, task.Importance, task.CreatedAt, task.Username)
+	result, err := db.Exec("INSERT INTO todos (title, description, importance, created_at, username) VALUES(?, ?, ?, ?, ?)", "todo", task.Content, task.Importance, task.CreatedAt, task.Username)
 	if err != nil {
 		log.Println("[ERROR] Error inserting into database -> ", err)
 	}
+	newid, err := result.LastInsertId()
+	if err != nil {
+		log.Println("[ERROR] Error retrieving last id -> ", err)
+	}
+
+	// Respond with html
+	htmlEl := fmt.Sprintf("<li id=%b class='todo-item' hx-trigger='change delay:2s' hx-target='#completed-box' hx-include='this' hx-post='/itemcompleted/%s/%b' hx-swap='beforeend'>\n<label>\n<input hx-delete='/delete/important/%b' hx-trigger='click delay:4s' hx-target='closest li' hx-swap='delete' type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, importance, newid, newid, content, importance, newid)
+	tmpl, _ := template.New("t").Parse(htmlEl)
+	tmpl.Execute(c.Writer, nil)
 }
 
 func indexHandler(c *gin.Context) {
@@ -125,7 +133,7 @@ func loginFormHandler(c *gin.Context) {
 		// Create a new session for new user and insert in map
 		// Set Cookie
 		sessionid := store.Save(username)
-		c.SetCookie("session_id", sessionid, 172800, "/", "localhost", false, true)
+		SetCookie(c.Writer, sessionid)
 		// Redirect to index.
 		c.Redirect(http.StatusFound, "/index")
 	} else {
@@ -137,11 +145,20 @@ func loginFormHandler(c *gin.Context) {
 		} else {
 			// Create a new session and store in session map
 			sessionid := store.Save(username)
-			c.SetCookie("session_id", sessionid, 172800, "/", "localhost", false, true)
+			SetCookie(c.Writer, sessionid)
+			
 			// Redirect to index.
 			c.Redirect(http.StatusFound, "/index")
 		}
 	}
+}
+
+func SetCookie(w http.ResponseWriter, value string) {
+	http.SetCookie(w, &http.Cookie{
+		Name: "session_id",
+		Value: value,
+		Expires: time.Now().Add(time.Hour * 24 * 10),
+	})
 }
 
 func filterTasksByImportance(importance string, original_tasks []Task) []Task {
@@ -212,8 +229,9 @@ func AuthFunc(c *gin.Context) {
 	}
 	// If it does not exists, send a forbidden http status and redirect to the login page.
 	session := store.Get(session_id)
+	fmt.Println(store)
 	fmt.Println(session.Username)
-	if session.Username != " " {
+	if session.Username == "" {
 		fmt.Println("Forbidden")
 		c.HTML(http.StatusForbidden, "login.html", nil)
 		c.Abort()
