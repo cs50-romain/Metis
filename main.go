@@ -87,6 +87,7 @@ func indexHandler(c *gin.Context) {
 
 	sessionid, _ := c.Cookie("session_id")
 	session := store.Get(sessionid)
+	log.Printf("[INFO] sessionid: %s, session username: %s\n", sessionid, session.Username)
 
 	// All of these need to get tasks based on the username as well now
 	tasks = getTasksByUsers(session.Username)
@@ -114,6 +115,7 @@ func loginHandler(c *gin.Context) {
 func loginFormHandler(c *gin.Context) {
 	username := c.PostForm("username")
 	password := c.PostForm("password")
+	// No usernmame found in database
 	if ok := getUsername(username); !ok {
 		// Create a new user and insert in database
 		_, err := db.Exec("INSERT INTO users (username, password) VALUES(?, ?)", username, password)
@@ -125,14 +127,19 @@ func loginFormHandler(c *gin.Context) {
 		sessionid := store.Save(username)
 		c.SetCookie("session_id", sessionid, 172800, "/", "localhost", false, true)
 		// Redirect to index.
-		c.Redirect(http.StatusOK, "/index")
+		c.Redirect(http.StatusFound, "/index")
 	} else {
 		if ok := checkPassword(username, password); !ok {
 			// Return an error message for user in login page
+			c.HTML(http.StatusForbidden, "login.html", nil)
+			c.Abort()
+			return
 		} else {
 			// Create a new session and store in session map
-
-			// Redirect to index (btw: Index will now need to grab tasks/todos based on the user as well)
+			sessionid := store.Save(username)
+			c.SetCookie("session_id", sessionid, 172800, "/", "localhost", false, true)
+			// Redirect to index.
+			c.Redirect(http.StatusFound, "/index")
 		}
 	}
 }
@@ -195,14 +202,19 @@ func getTasksByUsers(username string) []Task {
 
 // Middleware
 func AuthFunc(c *gin.Context) {
+	fmt.Println("Middleware starts")
 	// Get the session_id passed so the unique identifier passed by session_id
 	session_id, err := c.Cookie("session_id")
 	if err != nil {
-		//Cookie has not been set...somehow so set cookie
+		c.HTML(http.StatusForbidden, "login.html", nil)
+		c.Abort()
+		return
 	}
 	// If it does not exists, send a forbidden http status and redirect to the login page.
 	session := store.Get(session_id)
-	if session.Username != "" {
+	fmt.Println(session.Username)
+	if session.Username != " " {
+		fmt.Println("Forbidden")
 		c.HTML(http.StatusForbidden, "login.html", nil)
 		c.Abort()
 		return
@@ -237,13 +249,15 @@ func main() {
 	router := gin.Default()
 	router.LoadHTMLGlob("static/*")
 
+	authRouter := router.Group("/", AuthFunc)
+
 	// Init the sessions map
 	store = session.Init()
 	// Create the AuthGroup which will include everything except /login and /loginform
 
-	router.POST("/add-item/:importance", addTodoHandler)
-	router.DELETE("/delete/:importance/:id", deleteItemHandler)
-	router.GET("/index", indexHandler)
+	authRouter.POST("/add-item/:importance", addTodoHandler)
+	authRouter.DELETE("/delete/:importance/:id", deleteItemHandler)
+	authRouter.GET("/index", indexHandler)
 	router.GET("/login", loginHandler)
 	router.POST("/loginform", loginFormHandler)
 	router.Run()
