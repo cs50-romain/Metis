@@ -15,6 +15,7 @@ import (
 	ttask "github.com/cs50-romain/Metis/util/task"
 )
 
+const TEST = "test"
 const PATH_SEP_WINDOWS = '\\'
 const PATH_SEP_LINUX = '/'	
 
