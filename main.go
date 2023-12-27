@@ -7,14 +7,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cs50-romain/Metis/util/session"
 	"github.com/cs50-romain/MetisDeux/util/session"
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 )
 
 var db *sql.DB
-var store session.Store
+var store *session.Store
 
 type Tasks struct {
 	Itasks	[]Task
@@ -29,6 +28,7 @@ type Task struct {
 	IsCompleted	bool
 	CreatedAt	time.Time
 	Importance	string
+	Username	string
 }
 
 func deleteItemHandler(c *gin.Context) {
@@ -50,6 +50,9 @@ func addTodoHandler(c *gin.Context) {
 	// Add item to database and respond with html as previously done.
 	content := c.PostForm("content")
 	importance := c.Param("importance")
+	
+	sessionid, _ := c.Cookie("session_id")
+	session := store.Get(sessionid)
 
 	if importance == "important" {
 		importance = "high"
@@ -64,24 +67,37 @@ func addTodoHandler(c *gin.Context) {
 		IsCompleted: false,
 		CreatedAt: time.Now(),
 		Importance: importance,
+		Username: session.Username,
 	}
 
-	_, err := db.Exec("INSERT INTO todos (title, description, importance, created_at) VALUES(?, ?, ?, ?)", "todo", task.Content, task.Importance, task.CreatedAt)
+	fmt.Println(task.Username)
+
+	_, err := db.Exec("INSERT INTO todos (title, description, importance, created_at, username) VALUES(?, ?, ?, ?, ?)", "todo", task.Content, task.Importance, task.CreatedAt, task.Username)
 	if err != nil {
 		log.Println("[ERROR] Error inserting into database -> ", err)
 	}
 }
 
 func indexHandler(c *gin.Context) {
+	var tasks []Task
 	var itasks []Task
 	var mtasks []Task
 	var ltasks []Task
 	var ctasks []Task
 
+	sessionid, _ := c.Cookie("session_id")
+	session := store.Get(sessionid)
+
 	// All of these need to get tasks based on the username as well now
-	itasks = getTasksByImportance("high")
-	mtasks = getTasksByImportance("medium")
-	ltasks = getTasksByImportance("low")
+	tasks = getTasksByUsers(session.Username)
+	itasks = filterTasksByImportance("High", tasks)
+	mtasks = filterTasksByImportance("Medium", tasks)
+	ltasks = filterTasksByImportance("Low", tasks)
+
+	fmt.Println(tasks)
+	fmt.Println(itasks)
+	fmt.Println(mtasks)
+	fmt.Println(ltasks)
 
 	c.HTML(http.StatusOK, "index.tmpl", gin.H{
 		"ImportantTasks": itasks,
@@ -97,14 +113,20 @@ func loginHandler(c *gin.Context) {
 
 func loginFormHandler(c *gin.Context) {
 	username := c.PostForm("username")
+	password := c.PostForm("password")
 	if ok := getUsername(username); !ok {
 		// Create a new user and insert in database
-
+		_, err := db.Exec("INSERT INTO users (username, password) VALUES(?, ?)", username, password)
+		if err != nil {
+			log.Println("[ERROR] Error inserting into database -> ", err)
+		}
 		// Create a new session for new user and insert in map
-
+		// Set Cookie
+		sessionid := store.Save(username)
+		c.SetCookie("session_id", sessionid, 172800, "/", "localhost", false, true)
 		// Redirect to index.
+		c.Redirect(http.StatusOK, "/index")
 	} else {
-		password := c.PostForm("password")
 		if ok := checkPassword(username, password); !ok {
 			// Return an error message for user in login page
 		} else {
@@ -113,6 +135,16 @@ func loginFormHandler(c *gin.Context) {
 			// Redirect to index (btw: Index will now need to grab tasks/todos based on the user as well)
 		}
 	}
+}
+
+func filterTasksByImportance(importance string, original_tasks []Task) []Task {
+	var tasks []Task
+	for _, task := range original_tasks {
+		if task.Importance == importance {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
 }
 
 func getUsername(username string) bool {
@@ -139,21 +171,22 @@ func checkPassword(username, password string) bool {
 	}
 }
 
-func getTasksByImportance(importance string) []Task {	
+func getTasksByUsers(username string) []Task {	
 	var tasks []Task
 
-	rows, err :=  db.Query("SELECT * FROM todos WHERE importance= ?", importance)
+	rows, err :=  db.Query("SELECT * FROM todos WHERE username= ?", username)
 	if err != nil {
-		log.Println("[ERROR] Error querying row for important tasks -> ", err)
+		log.Println("[ERROR] Error querying row for tasks -> ", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var task Task
 		var title string
-		if err := rows.Scan(&task.Id, &title, &task.Content, &task.Importance, &task.CreatedAt); err != nil {
+		if err := rows.Scan(&task.Id, &title, &task.Content, &task.Importance, &task.CreatedAt, &task.Username); err != nil {
 			log.Println("[ERROR] Could not scan row -> ", err)
 		}
+		fmt.Println(task.Importance)
 
 		tasks = append(tasks, task)
 	}
@@ -169,7 +202,7 @@ func AuthFunc(c *gin.Context) {
 	}
 	// If it does not exists, send a forbidden http status and redirect to the login page.
 	session := store.Get(session_id)
-	if session == nil {
+	if session.Username != "" {
 		c.HTML(http.StatusForbidden, "login.html", nil)
 		c.Abort()
 		return
@@ -212,5 +245,6 @@ func main() {
 	router.DELETE("/delete/:importance/:id", deleteItemHandler)
 	router.GET("/index", indexHandler)
 	router.GET("/login", loginHandler)
+	router.POST("/loginform", loginFormHandler)
 	router.Run()
 }
