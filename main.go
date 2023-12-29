@@ -32,9 +32,23 @@ type Task struct {
 	Username	string
 }
 
+func completedHandler(c *gin.Context) {
+	importance := c.Param("importance")
+	id := c.Param("id")
+
+	fmt.Println(importance)
+
+	_, err := db.Exec("UPDATE todos SET importance = ? WHERE todo_id = ?", "Completed", id)
+	if err != nil {
+		log.Println("[ERROR] Error updating database -> ", err)
+	}
+}
+
 func deleteItemHandler(c *gin.Context) {
 	_ = c.Param("importance")
 	id := c.Param("id")
+
+	fmt.Println("Hello deleting item ", id)
 
 	_, err := db.Exec("DELETE FROM todos WHERE todo_id = ?", id)
 	if err != nil {
@@ -80,8 +94,10 @@ func addTodoHandler(c *gin.Context) {
 		log.Println("[ERROR] Error retrieving last id -> ", err)
 	}
 
+	fmt.Println("Adding item with id: ", newid)
+
 	// Respond with html
-	htmlEl := fmt.Sprintf("<li id=%b class='todo-item' hx-trigger='change delay:2s' hx-target='#completed-box' hx-include='this' hx-post='/itemcompleted/%s/%b' hx-swap='beforeend'>\n<label>\n<input hx-delete='/delete/important/%b' hx-trigger='click delay:4s' hx-target='closest li' hx-swap='delete' type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%b' hx-trigger='click' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, importance, newid, newid, content, importance, newid)
+	htmlEl := fmt.Sprintf("<li id=%d class='todo-item' hx-trigger='change delay:2s' hx-target='#completed-box' hx-include='this' hx-post='/itemcompleted/%s/%d' hx-swap='beforeend'>\n<label>\n<input type='checkbox'><span>%s</span>\n</label>\n<button hx-delete='/delete/%s/%d' hx-confirm='Are you sure?' hx-target='closest li' hx-swap='delete'>Delete</button>\n</li>", newid, importance, newid, content, importance, newid)
 	tmpl, _ := template.New("t").Parse(htmlEl)
 	tmpl.Execute(c.Writer, nil)
 }
@@ -102,11 +118,7 @@ func indexHandler(c *gin.Context) {
 	itasks = filterTasksByImportance("High", tasks)
 	mtasks = filterTasksByImportance("Medium", tasks)
 	ltasks = filterTasksByImportance("Low", tasks)
-
-	fmt.Println(tasks)
-	fmt.Println(itasks)
-	fmt.Println(mtasks)
-	fmt.Println(ltasks)
+	ctasks = filterTasksByImportance("Completed", tasks)
 
 	c.HTML(http.StatusOK, "index.tmpl", gin.H{
 		"ImportantTasks": itasks,
@@ -123,7 +135,8 @@ func loginHandler(c *gin.Context) {
 func loginFormHandler(c *gin.Context) {
 	username := c.PostForm("username")
 	password := c.PostForm("password")
-	// No usernmame found in database
+
+	// No username found in database
 	if ok := getUsername(username); !ok {
 		// Create a new user and insert in database
 		_, err := db.Exec("INSERT INTO users (username, password) VALUES(?, ?)", username, password)
@@ -227,10 +240,8 @@ func AuthFunc(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	// If it does not exists, send a forbidden http status and redirect to the login page.
+
 	session := store.Get(session_id)
-	fmt.Println(store)
-	fmt.Println(session.Username)
 	if session.Username == "" {
 		fmt.Println("Forbidden")
 		c.HTML(http.StatusForbidden, "login.html", nil)
@@ -262,7 +273,7 @@ func main() {
 	if pingErr != nil {
 		log.Fatal(pingErr)
 	}
-	fmt.Println("Connected!")
+	fmt.Println("[INFO] Connected!")
 
 	router := gin.Default()
 	router.LoadHTMLGlob("static/*")
@@ -274,6 +285,7 @@ func main() {
 	// Create the AuthGroup which will include everything except /login and /loginform
 
 	authRouter.POST("/add-item/:importance", addTodoHandler)
+	authRouter.POST("/itemcompleted/:importance/:id", completedHandler)
 	authRouter.DELETE("/delete/:importance/:id", deleteItemHandler)
 	authRouter.GET("/index", indexHandler)
 	router.GET("/login", loginHandler)

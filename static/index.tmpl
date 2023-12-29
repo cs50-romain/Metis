@@ -122,16 +122,16 @@
       <div class="todo-category">Important</div>
       <ul class="todo-list">
         {{ range .ImportantTasks }}
-        <li id="{{ .Id }}" class="todo-item" hx-trigger="change delay:2s" hx-target="#completed-box" hx-include="this" hx-post="/itemcompleted/important/{{ .Id }}" hx-swap="beforeend">
+        <li id="{{ .Id }}" class="todo-item" hx-trigger="change delay:2s" hx-target="#completed-box" hx-include="this" hx-post="/itemcompleted/important/{{ .Id }}" hx-swap="delete">
           <label>
-            <input hx-delete="/delete/important/{{ .Id }}" hx-trigger="click delay:4s" hx-target="closest li" hx-swap="delete" type="checkbox" checked><span>{{ .Content }}</span> 
+            <input type="checkbox" checked><span>{{ .Content }}</span> 
           </label>
-          <button hx-delete="/delete/important/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
+          <button hx-delete="/delete/important/{{ .Id }}" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
         </li>
         {{ end }}
       </ul>
       <div class="add-item">
-        <input name="content" type="text" placeholder="New Item">
+        <input id="important-input" name="content" type="text" placeholder="New Item">
         <button hx-post="/add-item/important" hx-include="previous input" hx-target="previous ul" hx-swap="beforeend">Add Item</button>
       </div>
     </div>
@@ -145,12 +145,12 @@
           <label>
             <input type="checkbox"><span>{{ .Content }}</span>
           </label>
-          <button hx-delete="/delete/minor/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
+          <button hx-delete="/delete/minor/{{ .Id }}" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
         </li>
         {{ end }}
       </ul>
       <div class="add-item">
-        <input name="content" type="text" placeholder="New Item">
+        <input id="minor-input" name="content" type="text" placeholder="New Item">
         <button hx-post="/add-item/minor" hx-include="previous input" hx-target="previous ul" hx-swap="beforeend">Add Item</button>
       </div>
     </div>
@@ -164,12 +164,12 @@
           <label>
             <input type="checkbox"><span>{{ .Content }}</span>
           </label>
-          <button hx-delete="/delete/later/{{ .Id }}" hx-trigger="click" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
+          <button hx-delete="/delete/later/{{ .Id }}" hx-confirm="Are you sure?" hx-target="closest li" hx-swap="delete">Delete</button>
         </li>
         {{ end }}
       </ul>
       <div class="add-item">
-        <input name="content" type="text" placeholder="New Item">
+        <input id="later-input" name="content" type="text" placeholder="New Item">
         <button hx-post="/add-item/later" hx-include="previous input" hx-target="previous ul" hx-swap="beforeend">Add Item</button>
       </div>
     </div>
@@ -194,6 +194,38 @@
       const box = document.getElementById(boxId);
       box.style.display = box.style.display === 'none' ? 'block' : 'none';
     }
+
+    document.addEventListener('htmx:afterRequest', function (event) {
+        // Reload the page after an htmx request
+        location.reload();
+    });
+
+    let queue = [];
+
+    document.addEventListener('keydown', function (e) {
+      queue.push(e.keyCode);
+    
+      if (e.keyCode == 73) {
+        if (queue.shift() == 17) {
+          e.preventDefault();
+          document.getElementById("important-input").focus();
+        }
+      } else if (e.keyCode == 77) {
+        if (queue.shift() == 17) {
+          e.preventDefault();
+          document.getElementById("minor-input").focus();
+        }
+      } else if (e.keyCode == 76) {
+        if (queue.shift() == 17) {
+          e.preventDefault();
+          document.getElementById("later-input").focus();
+        } 
+      }
+    });
+
+    document.addEventListener('keyup', function (e) {
+      queue.shift();
+    });
   </script>
 
 </body>
