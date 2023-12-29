@@ -3,8 +3,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"html/template"
+	"log"
 	"net/http"
 	"time"
 
@@ -33,10 +33,8 @@ type Task struct {
 }
 
 func completedHandler(c *gin.Context) {
-	importance := c.Param("importance")
+	_ = c.Param("importance")
 	id := c.Param("id")
-
-	fmt.Println(importance)
 
 	_, err := db.Exec("UPDATE todos SET importance = ? WHERE todo_id = ?", "Completed", id)
 	if err != nil {
@@ -137,7 +135,7 @@ func loginFormHandler(c *gin.Context) {
 	password := c.PostForm("password")
 
 	// No username found in database
-	if ok := getUsername(username); !ok {
+	if ok := getUsername(username); ok == false {
 		// Create a new user and insert in database
 		_, err := db.Exec("INSERT INTO users (username, password) VALUES(?, ?)", username, password)
 		if err != nil {
@@ -184,10 +182,16 @@ func filterTasksByImportance(importance string, original_tasks []Task) []Task {
 	return tasks
 }
 
+
+func filterOldCompletedTasks(completed_tasks []Task) {
+	
+}
+
 func getUsername(username string) bool {
 	var user string
-	row := db.QueryRow("SELECT * FROM users WHERE username= ?", username)
+	row := db.QueryRow("SELECT username FROM users WHERE username = ?", username)
 	if err := row.Scan(&user); err != nil {
+		fmt.Println("[ERROR] ", err)
 		return false
 	} else {
 		return true
@@ -197,8 +201,9 @@ func getUsername(username string) bool {
 func checkPassword(username, password string) bool {
 	var user string
 	var pass string
-	row := db.QueryRow("SELECT * FROM users WHERE username= ?", username)
+	row := db.QueryRow("SELECT username, password FROM users WHERE username= ?", username)
 	if err := row.Scan(&user, &pass); err != nil {
+		fmt.Println("[ERROR] Checking for password -> ", err)
 		return false
 	} else {
 		if pass == password {
@@ -260,6 +265,7 @@ func main() {
 		Net:    "tcp",
 		Addr:   "127.0.0.1:3306",
 		DBName: "todos",
+		ParseTime: true,
 		AllowNativePasswords: true,
 	}
 	// Get a database handle.
